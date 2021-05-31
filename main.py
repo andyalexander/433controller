@@ -13,9 +13,6 @@ with open(r'./credentials.yaml') as file:
 ip = credentials['mqtt']['ip']
 user = credentials['mqtt']['username']
 password = credentials['mqtt']['password']
-# ip = "192.168.2.10"
-# user = "mqtt"
-# password = "mqtt"
 client_id = "wateringHQ"
 
 MESSAGE_LENGTH = 8
