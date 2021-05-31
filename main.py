@@ -5,10 +5,17 @@ from schedule import Schedule
 from device import Device
 from states import States
 from datetime import timedelta, datetime
+import yaml
 
-ip = "192.168.2.10"
-user = "mqtt"
-password = "mqtt"
+with open(r'./credentials.yaml') as file:
+    credentials = yaml.full_load(file)
+
+ip = credentials['mqtt']['ip']
+user = credentials['mqtt']['username']
+password = credentials['mqtt']['password']
+# ip = "192.168.2.10"
+# user = "mqtt"
+# password = "mqtt"
 client_id = "wateringHQ"
 
 MESSAGE_LENGTH = 8
