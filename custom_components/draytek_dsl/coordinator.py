@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import html as _html
 import logging
 import re
 from datetime import timedelta
@@ -16,24 +17,28 @@ from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, DSL_STATUS_PATHS
 
 _LOGGER = logging.getLogger(__name__)
 
-# Regex patterns for downstream speed (tries with and without Kbps unit suffix)
+# Strips all HTML tags so patterns can match across table-cell boundaries.
+_TAG_RE = re.compile(r"<[^>]+>")
+
+# Patterns applied to tag-stripped plain text.  [^\d]*? matches any non-digit
+# characters (spaces, colons, slashes…) lazily so we capture the first number.
 _DS_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"Down\s*Speed[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Down(?:stream)?\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"\bDS\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Downstream[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Down\s*Speed[^<\d]*?(\d+)", re.IGNORECASE),
-    re.compile(r"Down(?:stream)?\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)", re.IGNORECASE),
+    re.compile(r"Down\s*Speed[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Down(?:stream)?\s*(?:Actual\s*)?Rate[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"\bDS\s*(?:Actual\s*)?Rate[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Downstream[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Down\s*Speed[^\d]*?(\d+)", re.IGNORECASE),
+    re.compile(r"Down(?:stream)?\s*(?:Actual\s*)?Rate[^\d]*?(\d+)", re.IGNORECASE),
 ]
 
 # Regex patterns for upstream speed
 _US_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"Up\s*Speed[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Up(?:stream)?\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"\bUS\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Upstream[^<\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
-    re.compile(r"Up\s*Speed[^<\d]*?(\d+)", re.IGNORECASE),
-    re.compile(r"Up(?:stream)?\s*(?:Actual\s*)?Rate[^<\d]*?(\d+)", re.IGNORECASE),
+    re.compile(r"Up\s*Speed[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Up(?:stream)?\s*(?:Actual\s*)?Rate[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"\bUS\s*(?:Actual\s*)?Rate[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Upstream[^\d]*?(\d+)\s*[Kk]bps", re.IGNORECASE),
+    re.compile(r"Up\s*Speed[^\d]*?(\d+)", re.IGNORECASE),
+    re.compile(r"Up(?:stream)?\s*(?:Actual\s*)?Rate[^\d]*?(\d+)", re.IGNORECASE),
 ]
 
 
@@ -44,18 +49,21 @@ def _encode_credential(value: str) -> str:
 
 def _parse_speeds(html: str) -> dict[str, int | None]:
     """Extract downstream and upstream kbps values from the DSL status page HTML."""
+    # Convert to plain text so patterns work regardless of table-cell structure
+    text = _html.unescape(_TAG_RE.sub(" ", html))
+
     download_kbps: int | None = None
     upload_kbps: int | None = None
 
     for pattern in _DS_PATTERNS:
-        match = pattern.search(html)
+        match = pattern.search(text)
         if match:
             download_kbps = int(match.group(1))
             _LOGGER.debug("Parsed downstream speed: %d kbps", download_kbps)
             break
 
     for pattern in _US_PATTERNS:
-        match = pattern.search(html)
+        match = pattern.search(text)
         if match:
             upload_kbps = int(match.group(1))
             _LOGGER.debug("Parsed upstream speed: %d kbps", upload_kbps)
