@@ -32,11 +32,11 @@ async def async_setup_entry(
 
 
 class DraytekDslSpeedSensor(CoordinatorEntity[DraytekDslCoordinator], SensorEntity):
-    """A sensor reporting the DSL downstream or upstream sync speed in kbit/s."""
+    """A sensor reporting the DSL downstream or upstream sync speed in Mbit/s."""
 
     _attr_device_class = SensorDeviceClass.DATA_RATE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfDataRate.KILOBITS_PER_SECOND
+    _attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
     _attr_has_entity_name = True
 
     def __init__(
@@ -58,7 +58,10 @@ class DraytekDslSpeedSensor(CoordinatorEntity[DraytekDslCoordinator], SensorEnti
         )
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> float | None:
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.get(f"{self._direction}_kbps")
+        kbps = self.coordinator.data.get(f"{self._direction}_kbps")
+        if kbps is None:
+            return None
+        return round(kbps / 1000, 3)

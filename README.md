@@ -119,16 +119,28 @@ Set the port to `443` when configuring the integration. Certificate verification
 
 The test suite runs without a Home Assistant installation. There are two kinds of tests:
 
+### Setup — install dependencies with uv
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv if you don't have it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then install the test dependencies:
+
+```bash
+uv sync
+```
+
+This creates a `.venv` virtual environment and installs everything from `uv.lock`.
+
 ### Unit tests (no router required)
 
 These test credential encoding, HTML parsing, and URL construction entirely offline.
 
 ```bash
-# Install test dependencies
-pip install -r requirements-test.txt
-
-# Run all unit tests
-pytest tests/test_credentials.py tests/test_parse_speeds.py tests/test_urls.py -v
+uv run pytest tests/test_credentials.py tests/test_parse_speeds.py tests/test_urls.py -v
 ```
 
 ### Integration tests (real router required)
@@ -157,7 +169,7 @@ DRAYTEK_PASSWORD=your_router_password
 **Step 2 — run the integration tests**
 
 ```bash
-pytest tests/test_integration.py -v
+uv run pytest tests/test_integration.py -v
 ```
 
 Expected output when the router is reachable and credentials are correct:
@@ -172,7 +184,7 @@ tests/test_integration.py::test_dsl_speeds_are_plausible PASSED
 **Run everything at once**
 
 ```bash
-pytest -v
+uv run pytest -v
 ```
 
 Unit tests always run; integration tests are skipped if `.env` is absent.
