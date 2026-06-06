@@ -23,46 +23,67 @@ No additional router configuration is required — SNMP does **not** need to be 
 
 ## Installation
 
-### Via HACS (recommended)
+### Option A — HACS (recommended)
+
+[HACS](https://hacs.xyz) is the standard way to manage custom integrations in Home Assistant.
 
 1. In Home Assistant, open **HACS → Integrations**
-2. Click the three-dot menu **⋮ → Custom repositories**
-3. Add `https://github.com/andyalexander/433controller` with category **Integration**
-4. Search for **DrayTek DSL** and install
+2. Click the three-dot menu **⋮** in the top-right corner, then **Custom repositories**
+3. Paste `https://github.com/andyalexander/2862-HA` into the URL field, set the category to **Integration**, and click **Add**
+4. Close the dialog, then search for **DrayTek DSL** and click **Download**
 5. Restart Home Assistant
 
-### Manual
+### Option B — Manual
 
-1. Copy the `custom_components/draytek_dsl/` folder into your HA config directory:
+1. Download or clone this repository
+2. Copy the `custom_components/draytek_dsl/` folder into your Home Assistant config directory:
+
    ```
-   <config>/custom_components/draytek_dsl/
+   /config/custom_components/draytek_dsl/
    ```
-2. Restart Home Assistant
+
+   If you are unsure where your config directory is, check **Settings → System → Storage** in Home Assistant — it shows the config path.
+
+3. Restart Home Assistant
 
 ---
 
-## Configuration
+## Setting Up the Integration (Username & Password)
 
-1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for **DrayTek DSL Speed Monitor**
-3. Fill in the form:
+Your router credentials are entered through the Home Assistant UI and stored **encrypted** in HA's internal config store. They are never written to any plain-text file such as `configuration.yaml`.
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| Router IP address | — | Local IP of your router, e.g. `192.168.1.1` |
-| Web interface port | `80` | `80` for HTTP, `443` for HTTPS |
-| Admin username | `admin` | Router admin username |
-| Admin password | — | Router admin password |
+1. Go to **Settings → Devices & Services**
+2. Click **+ Add Integration** (bottom-right)
+3. Search for **DrayTek DSL Speed Monitor** and select it
+4. Fill in the setup form:
 
-Credentials are stored **encrypted** in Home Assistant's config store and are never written to plain-text files.
+   | Field | Default | What to enter |
+   |-------|---------|---------------|
+   | Router IP address or hostname | — | The local IP of your DrayTek, e.g. `192.168.1.1`. Find it on the router's label or your broadband router's DHCP table. |
+   | Web interface port | `80` | Leave as `80` unless you have changed the router's HTTP port. Use `443` if your router is configured for HTTPS only. |
+   | Admin username | `admin` | The username you use to log into the router web UI (default is `admin`). |
+   | Admin password | — | The router admin password. This is the password for the web interface, **not** your broadband/ISP password. |
+
+5. Click **Submit**. The integration will attempt to log in and fetch the DSL status page. If it succeeds, two new sensors will appear under a **DrayTek Vigor** device.
+
+> **Where is the password stored?**
+> Home Assistant encrypts all config entry data (including passwords) using its internal secret store. The password is never visible in `configuration.yaml`, `.storage/`, or any log output.
+
+### Updating credentials
+
+If you change the router password, go to **Settings → Devices & Services → DrayTek DSL Speed Monitor → ⋮ → Reconfigure** to update the stored credentials.
+
+### Locating your router admin password
+
+The default admin password for the Vigor 2862 is printed on the label on the underside of the router. If it has been changed and you cannot remember it, you can reset the router to factory defaults by holding the **Factory Reset** button for 5 seconds (note: this resets all router settings, not just the password).
 
 ---
 
 ## How It Works
 
-1. On each poll (every 60 seconds), the integration authenticates with the router's web management interface at `/cgi-bin/wlogin.cgi` using base64-encoded credentials — the same mechanism the router's own web UI uses.
-2. It then fetches the DSL diagnostics page (under **Diagnostics → DSL Status** in the router UI) and parses the downstream and upstream sync rates.
-3. The two sensor values update automatically.
+1. Every 60 seconds the integration logs in to the router at `/cgi-bin/wlogin.cgi` using your credentials (base64-encoded, the same way the router's own web UI does it)
+2. It fetches the DSL diagnostics page — equivalent to **Diagnostics → DSL Status** in the router web UI — and parses the downstream and upstream sync rates
+3. The two sensor values update in Home Assistant automatically
 
 ---
 
@@ -70,23 +91,91 @@ Credentials are stored **encrypted** in Home Assistant's config store and are ne
 
 **Sensors show "unavailable"**
 
-- Check that the router IP is reachable from HA: `ping 192.168.1.1`
-- Verify the credentials are correct by logging into the router web UI manually
-- Enable debug logging in `configuration.yaml`:
+- Check that the router is reachable from the machine running Home Assistant: open a terminal and run `ping 192.168.1.1`
+- Log in to the router web UI manually at `http://192.168.1.1` to confirm the IP address and credentials are correct
+- Enable debug logging by adding the following to `configuration.yaml`, then restarting HA:
+
   ```yaml
   logger:
     logs:
       custom_components.draytek_dsl: debug
   ```
-  Then check **Settings → System → Logs** for details on which DSL status page URL was tried.
 
-**Both speeds show as 0 or unknown**
+  Go to **Settings → System → Logs** and look for `draytek_dsl` entries — you will see exactly which URLs were tried and what HTTP status codes were returned.
 
-Your firmware version may use a slightly different URL path for the DSL status page. With debug logging enabled, you will see which paths were attempted. Please [open an issue](https://github.com/andyalexander/433controller/issues) with your firmware version and the debug log output.
+**Speeds show as unknown or 0**
 
-**HTTPS / self-signed certificate errors**
+Your firmware version may use a slightly different URL for the DSL status page. With debug logging enabled you will see which paths were attempted. Please [open an issue](https://github.com/andyalexander/2862-HA/issues) with:
+- Your router model and firmware version (visible at the top of the router web UI)
+- The debug log output
 
-Set port to `443`. The integration skips certificate verification (routers use self-signed certs), so no extra configuration is needed.
+**HTTPS / certificate errors**
+
+Set the port to `443` when configuring the integration. Certificate verification is skipped automatically (routers use self-signed certificates that HA would otherwise reject).
+
+---
+
+## Running the Tests
+
+The test suite runs without a Home Assistant installation. There are two kinds of tests:
+
+### Unit tests (no router required)
+
+These test credential encoding, HTML parsing, and URL construction entirely offline.
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all unit tests
+pytest tests/test_credentials.py tests/test_parse_speeds.py tests/test_urls.py -v
+```
+
+### Integration tests (real router required)
+
+These connect to an actual router and verify that login succeeds and both speeds are returned. They are **skipped automatically** if credentials are not provided.
+
+**Step 1 — create a `.env` file**
+
+Copy the example file and fill in your router details:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```
+DRAYTEK_HOST=192.168.1.1
+DRAYTEK_PORT=80
+DRAYTEK_USERNAME=admin
+DRAYTEK_PASSWORD=your_router_password
+```
+
+> The `.env` file is listed in `.gitignore` and will never be committed.
+
+**Step 2 — run the integration tests**
+
+```bash
+pytest tests/test_integration.py -v
+```
+
+Expected output when the router is reachable and credentials are correct:
+
+```
+tests/test_integration.py::test_router_is_reachable PASSED
+tests/test_integration.py::test_login_succeeds PASSED
+tests/test_integration.py::test_dsl_speeds_are_returned PASSED
+tests/test_integration.py::test_dsl_speeds_are_plausible PASSED
+```
+
+**Run everything at once**
+
+```bash
+pytest -v
+```
+
+Unit tests always run; integration tests are skipped if `.env` is absent.
 
 ---
 
